@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config()
 const jwt = require('jsonwebtoken')
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 5000;
 app.use(cors())
@@ -42,13 +42,50 @@ async function run() {
         const instructorsCollection = client.db("musicianDB").collection("instructors");
         const classesCollection = client.db("musicianDB").collection("classes");
         const usersCollection = client.db("musicianDB").collection("users");
+        const cartCollection = client.db("musicianDB").collection("carts");
         // API to get jwt token
         app.post('/jwt', (req, res) => {
             const user = req.body;
-            console.log(user);
+            // console.log(user);
             const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
             res.send({ token })
         })
+        // cart related API
+        app.get('/carts', async (req, res) => {
+            const email = req.query.email
+            console.log(email)
+            if (!email) {
+                res.send([])
+            }
+            const query = { studentEmail: email }
+            const result = await cartCollection.find(query).toArray()
+            res.send(result)
+        })
+        app.post('/carts', async (req, res) => {
+            const myClass = req.body;
+            const myClassId = myClass.classId;
+            // console.log(myClassId);
+            const query = { _id: new ObjectId(myClassId) }
+            const selectedClass = await classesCollection.findOne(query);
+            console.log(selectedClass);
+            if (selectedClass) {
+                if (selectedClass.availableSeats > 0) {
+                    const cartInsertion = await cartCollection.insertOne(myClass);
+                    const filter = { _id: new ObjectId(myClassId) }
+                    const seatUpdate = await classesCollection.updateOne(filter,
+                        { $inc: { availableSeats: -1 } }
+                    );
+                    console.log('Successfully decreased available seats and stored the class.');
+                    return res.send({
+                        cartInsertion,
+                        seatUpdate
+                    })
+                } else {
+                    res.send({ message: 'Seat not available' })
+                }
+            }
+        })
+
         // user related API
         app.post('/users', async (req, res) => {
             const newUser = req.body;

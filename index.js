@@ -4,15 +4,17 @@ require('dotenv').config()
 const jwt = require('jsonwebtoken')
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
+const stripe = require('stripe')(process.env.PAYMENT_SECRET_KEY)
 const port = process.env.PORT || 5000;
 app.use(cors())
 app.use(express.json())
 
 // verify JWT
 const verifyJWT = (req, res, next) => {
-    const authorization = req.header.authorization;
+    const authorization = req.headers.authorization;
+    // console.log(authorization);
     if (!authorization) {
-        return res.status(401).send({ error: true, message: 'unauthorized access' })
+        return res.status(401).send({ error: true, message: 'unauthorizeddd access' })
     }
     const token = authorization.split(' ')[1]
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
@@ -43,6 +45,7 @@ async function run() {
         const classesCollection = client.db("musicianDB").collection("classes");
         const usersCollection = client.db("musicianDB").collection("users");
         const cartCollection = client.db("musicianDB").collection("carts");
+        const paymentCollection = client.db("musicianDB").collection("payments");
         // API to get jwt token
         app.post('/jwt', (req, res) => {
             const user = req.body;
@@ -51,9 +54,9 @@ async function run() {
             res.send({ token })
         })
         // cart related API
-        app.get('/carts', async (req, res) => {
+        app.get('/carts', verifyJWT, async (req, res) => {
             const email = req.query.email
-            console.log(email)
+            // console.log(email)
             if (!email) {
                 res.send([])
             }
@@ -67,15 +70,15 @@ async function run() {
             // console.log(myClassId);
             const query = { _id: new ObjectId(myClassId) }
             const selectedClass = await classesCollection.findOne(query);
-            console.log(selectedClass);
+            // console.log(selectedClass);
+            const cartInsertion = await cartCollection.insertOne(myClass);
             if (selectedClass) {
                 if (selectedClass.availableSeats > 0) {
-                    const cartInsertion = await cartCollection.insertOne(myClass);
                     const filter = { _id: new ObjectId(myClassId) }
                     const seatUpdate = await classesCollection.updateOne(filter,
                         { $inc: { availableSeats: -1 } }
                     );
-                    console.log('Successfully decreased available seats and stored the class.');
+                    // console.log('Successfully decreased available seats and stored the class.');
                     return res.send({
                         cartInsertion,
                         seatUpdate
@@ -102,6 +105,48 @@ async function run() {
             const result = await classesCollection.find().toArray()
             res.send(result)
         })
+        // payment related API
+
+        app.post('/create-payment-intent', verifyJWT, async (req, res) => {
+            const { price } = req.body;
+            const amount = parseInt(price * 100);
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: 'usd',
+                payment_method_types: ['card']
+            });
+
+            res.send({
+                clientSecret: paymentIntent.client_secret
+            })
+        })
+
+
+        // payment related api
+        app.post('/payments', verifyJWT, async (req, res) => {
+            const payment = req.body;
+            console.log(payment);
+            const insertResult = await paymentCollection.insertOne(payment);
+            const cartDeletedResult = await cartCollection.deleteOne({ _id: new ObjectId(payment.cartId) })
+
+            const query = { _id: new ObjectId(payment.classId) }
+            const selectedClass = await classesCollection.findOne(query);
+            // console.log(selectedClass);
+            if (selectedClass) {
+                if (selectedClass.availableSeats > 0) {
+
+                    const filter = { _id: new ObjectId(payment.classId) }
+                    const seatUpdate = await classesCollection.updateOne(filter,
+                        { $inc: { availableSeats: -1 } }
+                    );
+                    return res.send({
+                        insertResult,
+                        cartDeletedResult,
+                        seatUpdate
+                    })
+                }
+            }
+        })
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
@@ -119,3 +164,5 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log('Summer Camp server is running on port', port);
 })
+
+

@@ -12,14 +12,14 @@ app.use(express.json())
 // verify JWT
 const verifyJWT = (req, res, next) => {
     const authorization = req.headers.authorization;
-    // console.log(authorization);
+    console.log(authorization);
     if (!authorization) {
-        return res.status(401).send({ error: true, message: 'unauthorizeddd access' })
+        return res.status(401).send({ error: true, message: 'unauthorize1 access' })
     }
     const token = authorization.split(' ')[1]
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
         if (error) {
-            return res.status(401).send({ error: true, message: 'unauthorized access' })
+            return res.status(401).send({ error: true, message: 'unauthorized2 access' })
         }
         req.decoded = decoded;
         next()
@@ -69,6 +69,10 @@ async function run() {
             if (!email) {
                 res.send([])
             }
+            const decodedEmail = req.decoded.email;
+            if (email !== decodedEmail) {
+                return res.status(403).send({ error: true, message: 'forbidden access' })
+            }
             const query = { studentEmail: email }
             const result = await cartCollection.find(query).toArray()
             res.send(result)
@@ -91,22 +95,33 @@ async function run() {
             res.send(result)
         })
         // instructors related API
+
         app.get('/instructors', async (req, res) => {
             const result = await instructorsCollection.find().toArray()
             res.send(result)
         })
         // classes related API 
+        app.post('/classes', verifyJWT, async (req, res) => {
+            const newClass = req.body;
+            console.log(newClass);
+            const result = await classesCollection.insertOne(newClass)
+            res.send(result);
+        })
         app.get('/classes', async (req, res) => {
 
             const result = await classesCollection.find({ status: 'approved' }).sort({ enrolledStudents: -1 }).toArray()
             res.send(result)
         })
         // payment related API
-        app.get('/paidClasses', async (req, res) => {
+        app.get('/paidClasses', verifyJWT, async (req, res) => {
             const email = req.query.email
             // console.log(email)
             if (!email) {
                 res.send([])
+            }
+            const decodedEmail = req.decoded.email;
+            if (email !== decodedEmail) {
+                return res.status(403).send({ error: true, message: 'forbidden access' })
             }
             const query = { studentEmail: email }
             const result = await paymentCollection.find(query).sort({ date: -1 }).toArray()

@@ -46,6 +46,7 @@ async function run() {
         const usersCollection = client.db("musicianDB").collection("users");
         const cartCollection = client.db("musicianDB").collection("carts");
         const paymentCollection = client.db("musicianDB").collection("payments");
+
         // API to get jwt token
         app.post('/jwt', (req, res) => {
             const user = req.body;
@@ -54,6 +55,23 @@ async function run() {
             res.send({ token })
         })
         // cart related API
+        app.delete('/carts/:id', async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            const query = { _id: new ObjectId(id) }
+            const result = await cartCollection.deleteOne(query)
+            res.send(result);
+        })
+        app.get('/paidClasses', async (req, res) => {
+            const email = req.query.email
+            // console.log(email)
+            if (!email) {
+                res.send([])
+            }
+            const query = { studentEmail: email }
+            const result = await paymentCollection.find(query).toArray()
+            res.send(result)
+        })
         app.get('/carts', verifyJWT, async (req, res) => {
             const email = req.query.email
             // console.log(email)
@@ -66,27 +84,8 @@ async function run() {
         })
         app.post('/carts', async (req, res) => {
             const myClass = req.body;
-            const myClassId = myClass.classId;
-            // console.log(myClassId);
-            const query = { _id: new ObjectId(myClassId) }
-            const selectedClass = await classesCollection.findOne(query);
-            // console.log(selectedClass);
-            const cartInsertion = await cartCollection.insertOne(myClass);
-            if (selectedClass) {
-                if (selectedClass.availableSeats > 0) {
-                    const filter = { _id: new ObjectId(myClassId) }
-                    const seatUpdate = await classesCollection.updateOne(filter,
-                        { $inc: { availableSeats: -1 } }
-                    );
-                    // console.log('Successfully decreased available seats and stored the class.');
-                    return res.send({
-                        cartInsertion,
-                        seatUpdate
-                    })
-                } else {
-                    res.send({ message: 'Seat not available' })
-                }
-            }
+            const result = await cartCollection.insertOne(myClass);
+            res.send(result)
         })
 
         // user related API
@@ -137,7 +136,7 @@ async function run() {
 
                     const filter = { _id: new ObjectId(payment.classId) }
                     const seatUpdate = await classesCollection.updateOne(filter,
-                        { $inc: { availableSeats: -1 } }
+                        { $inc: { availableSeats: -1, enrolledStudents: 1 } }
                     );
                     return res.send({
                         insertResult,
@@ -164,5 +163,4 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log('Summer Camp server is running on port', port);
 })
-
 

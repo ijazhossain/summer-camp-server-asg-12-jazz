@@ -12,7 +12,7 @@ app.use(express.json())
 // verify JWT
 const verifyJWT = (req, res, next) => {
     const authorization = req.headers.authorization;
-    console.log(authorization);
+    // console.log(authorization);
     if (!authorization) {
         return res.status(401).send({ error: true, message: 'unauthorize1 access' })
     }
@@ -54,6 +54,26 @@ async function run() {
             const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
             res.send({ token })
         })
+        // verify Admin
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email: email }
+            const user = await usersCollection.findOne(query);
+            if (user?.role !== 'admin') {
+                return res.status(403).send({ error: true, message: 'forbidden message' });
+            }
+            next();
+        }
+        // verify Instructor
+        const verifyInstructor = async (req, res, next) => {
+            const email = req.decoded.email;
+            const query = { email: email }
+            const user = await usersCollection.findOne(query);
+            if (user?.role !== 'instructor') {
+                return res.status(403).send({ error: true, message: 'forbidden message' });
+            }
+            next();
+        }
         // cart related API
         app.delete('/carts/:id', async (req, res) => {
             const id = req.params.id;
@@ -95,21 +115,68 @@ async function run() {
             res.send(result)
         })
         // instructors related API
+        app.get('/users/instructor/:email', verifyJWT, async (req, res) => {
+            const email = req.params.email;
 
+            if (req.decoded.email !== email) {
+                res.send({ instructor: false })
+            }
+
+            const query = { email: email }
+            const user = await usersCollection.findOne(query);
+            const result = { instructor: user?.role === 'instructor' }
+            res.send(result);
+        })
         app.get('/instructors', async (req, res) => {
             const result = await instructorsCollection.find().toArray()
             res.send(result)
         })
         // classes related API 
+        app.patch('/classes/admin/:id', async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            const filter = { _id: new ObjectId(id) };
+            const newStatus = req.body;
+            console.log(newStatus.status);
+            const updateDoc = {
+                $set: {
+                    status: newStatus.status,
+                },
+            };
+
+            const result = await classesCollection.updateOne(filter, updateDoc);
+            res.send(result);
+
+        })
         app.post('/classes', verifyJWT, async (req, res) => {
             const newClass = req.body;
-            console.log(newClass);
+            // console.log(newClass);
             const result = await classesCollection.insertOne(newClass)
             res.send(result);
         })
-        app.get('/classes', async (req, res) => {
+        app.get('/approvedClasses', async (req, res) => {
 
             const result = await classesCollection.find({ status: 'approved' }).sort({ enrolledStudents: -1 }).toArray()
+            res.send(result)
+        })
+        app.get('/classes', async (req, res) => {
+            const result = await classesCollection.find({}).toArray()
+            res.send(result)
+        })
+        //ToDo verify instructor
+        app.get('/instructorClasses', verifyJWT, async (req, res) => {
+            const email = req.query.email;
+            console.log(email);
+            if (!email) {
+                res.send([])
+            }
+            const decodedEmail = req.decoded.email;
+            if (email !== decodedEmail) {
+                return res.status(403).send({ error: true, message: 'forbidden3 access' })
+            }
+            console.log(email);
+            const query = { instructorEmail: email };
+            const result = await classesCollection.find(query).toArray()
             res.send(result)
         })
         // payment related API

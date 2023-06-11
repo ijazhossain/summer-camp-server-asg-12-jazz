@@ -62,16 +62,7 @@ async function run() {
             const result = await cartCollection.deleteOne(query)
             res.send(result);
         })
-        app.get('/paidClasses', async (req, res) => {
-            const email = req.query.email
-            // console.log(email)
-            if (!email) {
-                res.send([])
-            }
-            const query = { studentEmail: email }
-            const result = await paymentCollection.find(query).toArray()
-            res.send(result)
-        })
+
         app.get('/carts', verifyJWT, async (req, res) => {
             const email = req.query.email
             // console.log(email)
@@ -91,6 +82,11 @@ async function run() {
         // user related API
         app.post('/users', async (req, res) => {
             const newUser = req.body;
+            const query = { email: newUser.email }
+            const existingUser = await usersCollection.findOne(query)
+            if (existingUser) {
+                return res.send({ message: 'user already exists' })
+            }
             const result = await usersCollection.insertOne(newUser);
             res.send(result)
         })
@@ -101,10 +97,21 @@ async function run() {
         })
         // classes related API 
         app.get('/classes', async (req, res) => {
-            const result = await classesCollection.find().toArray()
+
+            const result = await classesCollection.find({ status: 'approved' }).sort({ enrolledStudents: -1 }).toArray()
             res.send(result)
         })
         // payment related API
+        app.get('/paidClasses', async (req, res) => {
+            const email = req.query.email
+            // console.log(email)
+            if (!email) {
+                res.send([])
+            }
+            const query = { studentEmail: email }
+            const result = await paymentCollection.find(query).sort({ date: -1 }).toArray()
+            res.send(result)
+        })
 
         app.post('/create-payment-intent', verifyJWT, async (req, res) => {
             const { price } = req.body;
@@ -121,7 +128,6 @@ async function run() {
         })
 
 
-        // payment related api
         app.post('/payments', verifyJWT, async (req, res) => {
             const payment = req.body;
             console.log(payment);

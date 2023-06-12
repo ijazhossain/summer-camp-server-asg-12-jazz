@@ -104,6 +104,12 @@ async function run() {
         })
 
         // user related API
+        // ToDo verify admin (verify admin, JWT)
+        app.get('/users', async (req, res) => {
+            const result = await usersCollection.find({}).toArray();
+            res.send(result);
+        })
+
         app.post('/users', async (req, res) => {
             const newUser = req.body;
             const query = { email: newUser.email }
@@ -114,7 +120,23 @@ async function run() {
             const result = await usersCollection.insertOne(newUser);
             res.send(result)
         })
-        // instructors related API
+        app.patch('/users/admin/:id', async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            const filter = { _id: new ObjectId(id) };
+            const newRole = req.body;
+            console.log(newRole.role);
+            const updateDoc = {
+                $set: {
+                    role: newRole.role,
+                },
+            };
+
+            const result = await usersCollection.updateOne(filter, updateDoc);
+            res.send(result);
+
+        })
+        // instructors related API (isInspector)
         app.get('/users/instructor/:email', verifyJWT, async (req, res) => {
             const email = req.params.email;
 

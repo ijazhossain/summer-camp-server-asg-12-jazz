@@ -132,12 +132,28 @@ async function run() {
             res.send(result)
         })
         // classes related API 
-        app.patch('/classes/admin/:id', async (req, res) => {
+        app.patch('/classes/updateFeedback/admin/:id', async (req, res) => {
             const id = req.params.id;
             console.log(id);
             const filter = { _id: new ObjectId(id) };
+            const newFeedback = req.body;
+            console.log(newFeedback.feedback);
+            const updateDoc = {
+                $set: {
+                    feedback: newFeedback.feedback,
+                },
+            };
+
+            const result = await classesCollection.updateOne(filter, updateDoc);
+            res.send(result);
+
+        })
+        app.patch('/classes/admin/:id', async (req, res) => {
+            const id = req.params.id;
+            // console.log(id);
+            const filter = { _id: new ObjectId(id) };
             const newStatus = req.body;
-            console.log(newStatus.status);
+            // console.log(newStatus.status);
             const updateDoc = {
                 $set: {
                     status: newStatus.status,
